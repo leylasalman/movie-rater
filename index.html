@@ -1,11 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rate a Movie</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
     body {
       font-family: system-ui, -apple-system, sans-serif;
@@ -92,8 +99,13 @@
       line-height: 1;
     }
 
-    .star.active { color: #ef9f27; }
-    .star:hover { transform: scale(1.2); }
+    .star.active {
+      color: #ef9f27;
+    }
+
+    .star:hover {
+      transform: scale(1.2);
+    }
 
     .rating-label {
       font-size: 13px;
@@ -119,8 +131,13 @@
       border: none;
     }
 
-    .btn-primary:hover { background: #3c3489; }
-    .btn-primary:active { transform: scale(0.98); }
+    .btn-primary:hover {
+      background: #3c3489;
+    }
+
+    .btn-primary:active {
+      transform: scale(0.98);
+    }
 
     .toast {
       display: none;
@@ -155,7 +172,9 @@
       cursor: pointer;
     }
 
-    .clear-btn:hover { color: #333; }
+    .clear-btn:hover {
+      color: #333;
+    }
 
     .review-item {
       border: 1px solid #e8e5df;
@@ -171,8 +190,16 @@
       align-items: flex-start;
     }
 
-    .review-movie { font-size: 15px; font-weight: 600; }
-    .review-user { font-size: 12px; color: #888; margin-top: 2px; }
+    .review-movie {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .review-user {
+      font-size: 12px;
+      color: #888;
+      margin-top: 2px;
+    }
 
     .review-badge {
       background: #eeedfe;
@@ -191,6 +218,7 @@
     }
   </style>
 </head>
+
 <body>
 
   <div class="wrap">
@@ -230,22 +258,38 @@
         <div class="rating-label" id="ratingLabel">Click to rate</div>
       </div>
 
-      <button class="btn btn-primary" onclick="submitReview()">Submit Review</button>
+      <button class="btn btn-primary" id="submitBtn">Submit Review</button>
     </div>
 
     <div class="reviews-section" id="reviewsSection">
       <div class="reviews-header">
         <p class="reviews-title">Reviews</p>
-        <button class="clear-btn" onclick="clearAll()">Clear all</button>
+        <button class="clear-btn" id="clearBtn">Clear all</button>
       </div>
       <div id="reviewsList"></div>
     </div>
   </div>
 
-  <script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBt5pIFNxq68Cj7C18BVkIUZ_jqZTh8J7U",
+      authDomain: "movie-rater-4d0e8.firebaseapp.com",
+      projectId: "movie-rater-4d0e8",
+      storageBucket: "movie-rater-4d0e8.firebasestorage.app",
+      messagingSenderId: "950534330194",
+      appId: "1:950534330194:web:f103a0e12d6229009e8c8b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const reviewsCol = collection(db, 'reviews');
+
     let rating = 0;
-    const reviews = [];
-    const labels = ['','Unwatchable','Terrible','Very bad','Bad','Mediocre','Decent','Good','Great','Excellent','Masterpiece'];
+    let reviews = [];
+    const labels = ['', 'Unwatchable', 'Terrible', 'Very bad', 'Bad', 'Mediocre', 'Decent', 'Good', 'Great', 'Excellent', 'Masterpiece'];
     const stars = document.querySelectorAll('.star');
 
     stars.forEach(s => {
@@ -262,22 +306,63 @@
       stars.forEach(s => s.classList.toggle('active', +s.dataset.v <= n));
     }
 
-    function submitReview() {
+    document.getElementById('submitBtn').addEventListener('click', async () => {
       const name = document.getElementById('uname').value.trim();
       const movie = document.getElementById('movie').value.trim();
       if (!name || !movie || !rating) {
         showToast('Please fill in all fields and select a rating.', 'error');
         return;
       }
-      reviews.unshift({ name, movie, rating });
-      showToast('Review submitted! Thanks, ' + name + '.', 'success');
-      document.getElementById('uname').value = '';
-      document.getElementById('movie').value = '';
-      rating = 0;
-      highlight(0);
-      document.getElementById('ratingLabel').textContent = 'Click to rate';
-      renderReviews();
-    }
+
+      const prevBtnText = document.getElementById('submitBtn').textContent;
+      document.getElementById('submitBtn').textContent = 'Submitting...';
+      document.getElementById('submitBtn').disabled = true;
+
+      try {
+        await addDoc(reviewsCol, {
+          name,
+          movie,
+          rating,
+          createdAt: serverTimestamp()
+        });
+        showToast('Review submitted! Thanks, ' + name + '.', 'success');
+        document.getElementById('uname').value = '';
+        document.getElementById('movie').value = '';
+        rating = 0;
+        highlight(0);
+        document.getElementById('ratingLabel').textContent = 'Click to rate';
+      } catch (e) {
+        console.error("Error adding document: ", e);
+        showToast('Error submitting review. Please try again.', 'error');
+      } finally {
+        document.getElementById('submitBtn').textContent = prevBtnText;
+        document.getElementById('submitBtn').disabled = false;
+      }
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', async () => {
+      if (!confirm("Are you sure you want to clear all reviews for everyone?")) return;
+
+      const prevBtnText = document.getElementById('clearBtn').textContent;
+      document.getElementById('clearBtn').textContent = 'Clearing...';
+      document.getElementById('clearBtn').disabled = true;
+
+      try {
+        const snapshot = await getDocs(reviewsCol);
+        const deletePromises = [];
+        snapshot.forEach(doc => {
+          deletePromises.push(deleteDoc(doc.ref));
+        });
+        await Promise.all(deletePromises);
+        showToast('All reviews cleared.', 'success');
+      } catch (e) {
+        console.error("Error clearing reviews: ", e);
+        showToast('Error clearing reviews.', 'error');
+      } finally {
+        document.getElementById('clearBtn').textContent = prevBtnText;
+        document.getElementById('clearBtn').disabled = false;
+      }
+    });
 
     function showToast(msg, type) {
       const t = document.getElementById('toast');
@@ -314,11 +399,16 @@
       `).join('');
     }
 
-    function clearAll() {
-      reviews.length = 0;
+    const q = query(reviewsCol, orderBy('createdAt', 'desc'));
+    onSnapshot(q, (snapshot) => {
+      reviews = [];
+      snapshot.forEach((doc) => {
+        reviews.push(doc.data());
+      });
       renderReviews();
-    }
+    });
   </script>
 
 </body>
+
 </html>
